@@ -1,0 +1,64 @@
+#!/bin/bash
+
+# Check if the required number of arguments is provided
+if [ "$#" -ne 3 ]; then
+    echo "Usage: $0 <file1.tsv> <file2.tsv> <file3.tsv>"
+    exit 1
+fi
+
+# Assign input file names to variables
+file1="homicide-rate-unodc.tsv"
+file2="gdp-vs-happiness.tsv"
+file3="life-satisfaction-vs-life-expectancy.tsv"
+
+# Function to execute script based on file name
+execute_script() {
+    if [ "$1" == "$file1" ]; then
+        ./homicide-rate-unodc-cleaning.sh "$1"
+        echo "calling cleaning script for homicide data"
+    elif [ "$1" == "$file2" ]; then
+        ./gdp-vs-happiness-cleaning.sh "$1"
+        echo "calling cleaning script for gdp vs happiness data"
+    elif [ "$1" == "$file3" ]; then
+        ./life-satisfaction-cleaning.sh "$1"
+        echo "calling cleaning script for life satisfaction data"
+    fi
+    if [ "$2" == "$file1" ]; then
+        ./homicide-rate-unodc-cleaning.sh "$2"
+        echo "calling cleaning script for homicide data"
+    elif [ "$2" == "$file2" ]; then
+        ./gdp-vs-happiness-cleaning.sh "$2"
+        echo "calling cleaning script for gdp vs happiness data"
+    elif [ "$2" == "$file3" ]; then
+        ./life-satisfaction-cleaning.sh "$2"
+        echo "calling cleaning script for life satisfaction data"
+    fi
+    if [ "$3" == "$file1" ]; then
+        ./homicide-rate-unodc-cleaning.sh "$3"
+        echo "calling cleaning script for homicide data"
+    elif [ "$3" == "$file2" ]; then
+        ./gdp-vs-happiness-cleaning.sh "$3"
+        echo "calling cleaning script for gdp vs happiness data"
+    elif [ "$3" == "$file3" ]; then
+        ./life-satisfaction-cleaning.sh "$3"
+        echo "calling cleaning script for life satisfaction data"
+    fi
+
+}
+
+execute_script $file1 $file2 $file3
+
+./script_main_merge.sh
+
+> merged-output.tsv
+# Read the input file line by line
+while read -r fields; do
+
+    # Check if the number of fields in the current row is equal to the number of fields in the header
+    if [[ $(echo "$fields" | awk -F'\t' '{print NF}') -eq $num_fields ]]; then
+        # If yes, output the row to the temporary file
+        echo -e "${fields[@]}" >> merged-output.tsv
+    fi
+done < final_merge.tsv
+
+rm -f merged-output.tsv

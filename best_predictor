@@ -1,0 +1,112 @@
+#!/bin/bash
+
+# Check if the input file is provided
+if [ $# -ne 1 ]; then
+  echo "Usage: $0 <datafile>"
+  exit 1
+fi
+
+DATAFILE=$1
+
+# Ensure the input file exists
+if [ ! -f "$DATAFILE" ]; then
+  echo "File not found: $DATAFILE"
+  exit 1
+fi
+
+# Define predictors and the Cantril Ladder score column
+PREDICTORS=("GDP per capita" "Population" "Homicide Rate" "Life Expectancy")
+CANTRIL_COL="Cantril Ladder score"
+
+# Function to calculate Pearson correlation coefficient
+pearson_correlation() {
+  awk '
+  BEGIN {
+    sum_x = 0;
+    sum_y = 0;
+    sum_xy = 0;
+    sum_x2 = 0;
+    sum_y2 = 0;
+  }
+  {
+    sum_x += $1;
+    sum_y += $2;
+    sum_xy += $1 * $2;
+    sum_x2 += $1 * $1;
+    sum_y2 += $2 * $2;
+    n += 1;
+  }
+  END {
+    numerator = n * sum_xy - sum_x * sum_y;
+    denominator = sqrt((n * sum_x2 - sum_x * sum_x) * (n * sum_y2 - sum_y * sum_y));
+    if (denominator == 0) {
+      print 0;
+    } else {
+      print numerator / denominator;
+    }
+  }'
+}
+
+# Function to compute mean of an array
+mean() {
+  awk '{sum += $1; count += 1} END {if (count > 0) print sum / count; else print "NaN"}'
+}
+
+declare -A correlations
+for predictor in "${PREDICTORS[@]}"; do
+  correlations["$predictor"]=""
+done
+
+# Process each country
+countries=$(awk -F'\t' 'NR>1 {print $1}' "$DATAFILE" | sort | uniq)
+for country in $countries; do
+  country_data=$(awk -F'\t' -v country="$country" '$1 == country' "$DATAFILE")
+  
+  for predictor in "${PREDICTORS[@]}"; do
+    predictor_values=()
+    cantril_values=()
+    
+    while IFS=$'\t' read -r entity code year gdp population homicide life_expectancy cantril; do
+      predictor_value=""
+      case $predictor in
+        "GDP per capita") predictor_value=$gdp ;;
+        "Population") predictor_value=$population ;;
+        "Homicide Rate") predictor_value=$homicide ;;
+        "Life Expectancy") predictor_value=$life_expectancy ;;
+      esac
+      
+      if [ -n "$predictor_value" ] && [ -n "$cantril" ]; then
+        predictor_values+=("$predictor_value")
+        cantril_values+=("$cantril")
+      fi
+    done <<< "$country_data"
+    
+    if [ ${#predictor_values[@]} -ge 3 ]; then
+      values=$(paste -d' ' <(printf "%s\n" "${predictor_values[@]}") <(printf "%s\n" "${cantril_values[@]}"))
+      correlation=$(echo "$values" | pearson_correlation)
+      correlations["$predictor"]+="$correlation\n"
+    fi
+  done
+done
+
+# Calculate mean correlations
+declare -A mean_correlations
+for predictor in "${PREDICTORS[@]}"; do
+  mean_correlations["$predictor"]=$(echo -e "${correlations[$predictor]}" | mean)
+done
+
+# Determine the best predictor
+best_predictor=""
+max_corr=0
+for predictor in "${PREDICTORS[@]}"; do
+  corr="${mean_correlations[$predictor]}"
+  abs_corr=$(echo "${corr#-}")
+  if (( $(echo "$abs_corr > $max_corr" | bc -l) )); then
+    max_corr="$abs_corr"
+    best_predictor="$predictor"
+  fi
+  echo "Mean correlation of $predictor with Cantril ladder is $corr"
+done
+
+# Output the best predictor
+echo "Most predictive mean correlation with the Cantril ladder is $best_predictor (r = ${mean_correlations[$best_predictor]})"
